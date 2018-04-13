@@ -853,5 +853,31 @@ namespace OptimizelySDK.Tests
         }
 
         #endregion // GetVariationForFeature Tests
+
+        [Test]
+        public void TestGetVariationValidatesUserProfileMap()
+        {
+            Experiment experiment = ProjectConfig.Experiments[8];
+            Variation variation = experiment.Variations[0];
+            Decision decision = new Decision(variation.Id);
+            UserProfile userProfile = new UserProfile(UserProfileId, new Dictionary<string, Decision>
+            {
+                { experiment.Id, decision }
+            });
+
+            var invalidMap = userProfile.ToMap();
+            invalidMap.Remove("user_id");
+            UserProfileServiceMock.Setup(up => up.Lookup(GenericUserId)).Returns(invalidMap);
+            DecisionService decisionService = new DecisionService(BucketerMock.Object, ErrorHandlerMock.Object, ProjectConfig, UserProfileServiceMock.Object, LoggerMock.Object);
+
+            decisionService.GetVariation(experiment, GenericUserId, new UserAttributes());
+            LoggerMock.Verify(l => l.Log(LogLevel.ERROR, string.Format("The UserProfileService returned an invalid map.")), Times.Once);
+
+            UserProfileServiceMock.Setup(up => up.Lookup(GenericUserId)).Throws(new Exception("Exception thrown from Lookup method."));
+            decisionService = new DecisionService(BucketerMock.Object, ErrorHandlerMock.Object, ProjectConfig, UserProfileServiceMock.Object, LoggerMock.Object);
+
+            decisionService.GetVariation(experiment, GenericUserId, new UserAttributes());
+            LoggerMock.Verify(l => l.Log(LogLevel.ERROR, string.Format("Exception thrown from Lookup method.")), Times.Once);
+        }
     }
 }
