@@ -1,0 +1,18 @@
+version: 1.0.{build}
+image: Visual Studio 2017
+skip_tags: true
+configuration: Release
+environment:
+  COVERALLS_REPO_TOKEN:
+    secure: oGc9qs9y1AsjsvFmUAvt6Nl/t7Lgk+2SfeXbRs7OkwbIwrk75OxpLAkdUZgpe+QJ
+before_build:
+  - nuget restore .\OptimizelySDK.Travis.sln
+  - nuget install .\OptimizelySDK.Tests\packages.config -OutputDirectory .\packages
+  - nuget install NUnit.Runners -Version 2.6.4 -OutputDirectory .\testrunner
+  - nuget install coveralls.net -Version 0.7.0 -OutputDirectory .\testrunner
+build:
+  project: .\OptimizelySDK.Travis.sln
+  verbosity: minimal
+test_script:
+  - .\packages\OpenCover.4.6.519\tools\OpenCover.Console.exe -register:user -filter:+[OptimizelySDK]* -target:.\testrunner\NUnit.Runners.2.6.4\tools\nunit-console.exe -targetargs:".\OptimizelySDK.Tests\bin\Release\OptimizelySDK.Tests.dll /noshadow" -output:opencoverCoverage.xml
+  - ps: .\testrunner\coveralls.net.0.7.0\tools\csmacnz.Coveralls.exe --opencover -i opencoverCoverage.xml --repoToken $env:COVERALLS_REPO_TOKEN --useRelativePaths --commitId $env:APPVEYOR_REPO_COMMIT --commitBranch $env:APPVEYOR_REPO_BRANCH --commitAuthor $env:APPVEYOR_REPO_COMMIT_AUTHOR --commitEmail $env:APPVEYOR_REPO_COMMIT_AUTHOR_EMAIL --commitMessage $env:APPVEYOR_REPO_COMMIT_MESSAGE --jobId $env:APPVEYOR_BUILD_NUMBER --serviceName appveyor
