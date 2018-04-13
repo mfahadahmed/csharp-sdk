@@ -810,5 +810,17 @@ namespace OptimizelySDK.Tests
             var variation = Config.GetVariationFromKey("test_experiment", "control");
             Assert.IsFalse(variation.IsFeatureEnabled);
         }
+
+        [Test]
+        public void TestGetRolloutFromIdWithInvalidRolloutId()
+        {
+            var rollout = Config.GetRolloutFromId("invalid_rollout");
+
+            LoggerMock.Verify(l => l.Log(It.IsAny<LogLevel>(), It.IsAny<string>()), Times.Once);
+            LoggerMock.Verify(l => l.Log(LogLevel.ERROR, @"Rollout ID ""invalid_rollout"" is not in datafile."));
+
+            ErrorHandlerMock.Verify(e => e.HandleError(It.Is<InvalidRolloutException>(ex => ex.Message == "Provided rollout is not in datafile.")));
+            Assert.AreEqual(new Rollout(), rollout);
+        }
     }
 }
