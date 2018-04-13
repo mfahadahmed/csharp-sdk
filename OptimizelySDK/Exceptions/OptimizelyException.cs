@@ -73,15 +73,7 @@ namespace OptimizelySDK.Exceptions
         {
         }
     }
-
-    public class InvalidInputException : OptimizelyException
-    {
-        public InvalidInputException(string message)
-            : base(message)
-        {
-        }
-    }
-
+    
     public class InvalidVariationException : OptimizelyException
     {
         public InvalidVariationException(string message)
