@@ -242,6 +242,25 @@ namespace OptimizelySDK.Tests
         }
 
         [Test]
+        public void TestGetStoredVariationReturnsNullWhenVariationIsNull()
+        {
+            Experiment experiment = ProjectConfig.Experiments[6];
+            string storedVariationId = null;
+            Decision storedDecision = new Decision(storedVariationId);
+
+            var storedDecisions = new Dictionary<string, Decision>();
+            storedDecisions[experiment.Id] = storedDecision;
+
+            UserProfile storedUserProfile = new UserProfile(UserProfileId, storedDecisions);
+            Bucketer bucketer = new Bucketer(LoggerMock.Object);
+            UserProfileServiceMock.Setup(up => up.Lookup(UserProfileId)).Returns(storedUserProfile.ToMap());
+
+            DecisionService decisionService = new DecisionService(bucketer, ErrorHandlerMock.Object, ProjectConfig,
+                UserProfileServiceMock.Object, LoggerMock.Object);
+            Assert.IsNull(decisionService.GetStoredVariation(experiment, storedUserProfile));
+        }
+
+        [Test]
         public void TestGetVariationSavesBucketedVariationIntoUserProfile()
         {
             Experiment experiment = ProjectConfig.Experiments[6];
@@ -297,6 +316,37 @@ namespace OptimizelySDK.Tests
                 ("Failed to save variation \"{0}\" of experiment \"{1}\" for user \"{2}\".", variation.Id, experiment.Id, UserProfileId))
                 , Times.Once);
             ErrorHandlerMock.Verify(er => er.HandleError(It.IsAny<OptimizelySDK.Exceptions.OptimizelyRuntimeException>()), Times.Once);
+        }
+
+        [Test]
+        public void TestSaveVariationUpdatesDecisionForExistingExperiment()
+        {
+            Experiment experiment = ProjectConfig.Experiments[6];
+            Variation variation = experiment.Variations[0];
+            var experimentBucketMap = new Dictionary<string, Decision>();
+            experimentBucketMap[experiment.Id] = new Decision(variation.Id);
+            UserProfile saveUserProfile = new UserProfile(UserProfileId, new Dictionary<string, Decision>());
+
+            DecisionService decisionService = new DecisionService(new Bucketer(LoggerMock.Object), ErrorHandlerMock.Object,
+                ProjectConfig, UserProfileServiceMock.Object, LoggerMock.Object);
+
+            decisionService.SaveVariation(experiment, variation, saveUserProfile);
+            LoggerMock.Verify(l => l.Log(LogLevel.INFO, string.Format("Saved variation \"{0}\" of experiment \"{1}\" for user \"{2}\".",
+                variation.Id, experiment.Id, UserProfileId)), Times.Once);
+        }
+
+        [Test]
+        public void TestSaveVariationOnlyWorksWithValidUserProfile()
+        {
+            Experiment experiment = ProjectConfig.Experiments[6];
+            Variation variation = experiment.Variations[0];
+            Bucketer bucketer = new Bucketer(LoggerMock.Object);
+            UserProfile saveUserProfile = new UserProfile(UserProfileId, new Dictionary<string, Decision>());
+            DecisionService decisionService = new DecisionService(bucketer, ErrorHandlerMock.Object, ProjectConfig, null, LoggerMock.Object);
+
+            decisionService.SaveVariation(experiment, variation, saveUserProfile);
+            LoggerMock.Verify(l => l.Log(LogLevel.INFO, string.Format("Saved variation \"{0}\" of experiment \"{1}\" for user \"{2}\".",
+                variation.Id, experiment.Id, UserProfileId)), Times.Never);
         }
 
         [Test]
@@ -444,6 +494,14 @@ namespace OptimizelySDK.Tests
 
         #region GetVariationForFeatureExperiment Tests
 
+        // Should return null for invalid feature flag.
+        [Test]
+        public void TestGetVariationForFeatureExperimentWithInvalidFeatureFlag()
+        {
+            Assert.IsNull(DecisionService.GetVariationForFeatureExperiment(null, WhitelistedUserId, new UserAttributes()));
+            LoggerMock.Verify(l => l.Log(LogLevel.ERROR, "Invalid feature flag provided."));
+        }
+
         // Should return null and log a message when the feature flag's experiment ids array is empty
         [Test]
         public void TestGetVariationForFeatureExperimentGivenNullExperimentIds()
@@ -549,6 +607,32 @@ namespace OptimizelySDK.Tests
         #endregion // GetVariationForFeatureExperiment Tests
 
         #region GetVariationForFeatureRollout Tests
+
+        // Should return null for invalid feature flag.
+        [Test]
+        public void TestGetVariationForFeatureRolloutWithInvalidFeatureFlag()
+        {
+            Assert.IsNull(DecisionService.GetVariationForFeatureRollout(null, WhitelistedUserId, new UserAttributes()));
+            LoggerMock.Verify(l => l.Log(LogLevel.ERROR, "Invalid feature flag provided."));
+        }
+
+        // Should return null when rollout doesn't exist for the feature.
+        [Test]
+        public void TestGetVariationForFeatureRolloutWithInvalidRolloutRule()
+        {
+            var featureFlag = ProjectConfig.GetFeatureFlagFromKey("boolean_feature");
+            var invalidRolloutFeature = new FeatureFlag
+            {
+                RolloutId = "invalid_rollout_id",
+                Id = featureFlag.Id,
+                Key = featureFlag.Key,
+                ExperimentIds = new List<string>(featureFlag.ExperimentIds),
+                Variables = featureFlag.Variables
+            };
+
+            Assert.IsNull(DecisionService.GetVariationForFeatureRollout(invalidRolloutFeature, "user1", new UserAttributes()));
+            LoggerMock.Verify(l => l.Log(LogLevel.ERROR, "The rollout with id \"invalid_rollout_id\" is not found in the datafile for feature flag \"boolean_feature\""));
+        }
 
         // Should return null when rollout doesn't exist for the feature.
         [Test]
